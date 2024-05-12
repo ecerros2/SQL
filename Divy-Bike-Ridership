@@ -1,0 +1,183 @@
+TLDR:
+
+Findings
+1. Guests take longer rides than members, suggesting they may be using the bikes for leisure/tourism.
+2. Both groups see a rise in rides in the summer, but members ride year-round.
+3. Top start stations include Streeter Dr & Grand Ave and Clark St & Elm St.
+4. Members make up the majority of rides (60.98%).
+5. August 8th is the most popular day for both groups, while August 29th and September 5th are most popular for members and guests, respectively.
+
+
+Recommendations:
+1. Investigate the differences between member and guest riders in terms of ride length and frequency.
+2. Consider offering a spring/summer membership to attract guests to become members.
+3. Develop a digital media strategy that includes a user-submitted trail/map feature to encourage guest riders to become members.
+
+
+As part of the Google Data Analytics course, I completed a data analysis project on Divvy bike ridership in Chicago from 2020-2022. The project was based on publicly available data sets found at https://divvy-tripdata.s3.amazonaws.com/index.html, which contained information on bike rentals, stations, and ridership.
+
+The main objective of the project was to explore and compare the usage patterns of guest riders versus member riders. To achieve this, I utilized SQL and Tableau to clean, combine, and visualize the data.
+
+By conducting this analysis, I was able to gain valuable insights into the behavior and preferences of Divvy bike riders, including how frequently they rented bikes, the average duration of their rides, and how their usage patterns differed between guest and member riders.
+
+CONTEXT 
+Introduction 
+I am a junior data analyst working in a marketing analysis team in chicago. Where the director of marketing believes the company can become more successful by maximizing the number of annual memberships.  My challenge is to understand how casual riders and annual member riders use the cyclist bikes differently. The insights I create will be used to  design a new marketing strategy to convert casual riders into annual members. Casual riders are those who purchase single or day passes, while annual members are those who buy annual memberships. 
+
+Problems: 
+ My challenge is to understand how casual riders and annual member riders use the cyclist bikes differently. 
+1.How do annual members and casual riders use Cyclistic bikes differently? 
+2. Why would casual riders buy Cyclistic annual memberships? 
+3. How can cyclists use digital media to influence casual riders to become members?
+
+
+STEPS 
+
+1. Combining all the datasets into a single data set.
+      Note: The first three months of the year were listed as "quarterone". Additionally, the december dataset had data       type errors that were overcome utlitizing a cast function. 
+
+CREATE TABLE `capstone-375021.2020.combined_data`
+AS
+SELECT * FROM `capstone-375021.2020.August`
+UNION ALL
+SELECT * FROM `capstone-375021.2020.july`
+UNION ALL
+SELECT * FROM `capstone-375021.2020.june`
+UNION ALL
+SELECT * FROM `capstone-375021.2020.may`
+UNION ALL
+SELECT * FROM `capstone-375021.2020.april`
+UNION ALL
+SELECT * FROM `capstone-375021.2020.quarterone`
+UNION ALL
+SELECT * FROM `capstone-375021.2020.september`
+UNION ALL
+SELECT * FROM `capstone-375021.2020.october`
+UNION ALL
+SELECT * FROM `capstone-375021.2020.november`
+UNION ALL
+SELECT ride_id, rideable_type, started_at, ended_at, start_station_name, SAFE_CAST(start_station_id AS INT64), end_station_name, SAFE_CAST(end_station_id AS int64), start_lat, start_lng, end_lat, end_lng, member_casual FROM `capstone-375021.2020.december`
+
+2. Cleaning the dataset. 
+
+2a. Listwise Deletion
+      Removing the unnecessary rows or rows that were missing the necessary information. Specifically every ride that         was a docked or classic bike had to begin at a start station. While electronic bikes could be locked and start
+      anywhere. Next, all rides had to be at least a minute long and less than a day long. If it was longer than a day, 
+      it was assumed as lost or stolen. 
+      
+      Note: 3541683 original rows but 269077 rows had to be excluded. Ended up with 3272606 rows. 
+
+   
+CREATE TABLE `capstone-375021.2020.cleaned_data`
+AS
+select ride_id,
+      FORMAT_TIMESTAMP("%m-%d",started_at) AS Date,
+      TIMESTAMP_DIFF(ended_at,started_at, MINUTE) as Ride_Duration,
+      customer_type,
+      rideable_type,
+      start_station_name,
+      end_station_name,
+      start_lat,start_lng,
+      end_lat, end_lng
+FROM `capstone-375021.2020.combined_data`
+WHERE TIMESTAMP_DIFF(ended_at,started_at, MINUTE) > 1 AND TIMESTAMP_DIFF(ended_at,started_at, MINUTE) < 1440
+    AND (rideable_type = 'docked_bike' AND start_station_name IS NOT NULL AND end_station_name IS NOT NULL
+    OR rideable_type = 'electric_bike' AND end_station_name IS NOT NULL)
+    
+    
+    
+2b. Renaming columns and values
+
+UPDATING COLUMN NAMES 
+ALTER TABLE `capstone-375021.2021.cleaned_data` RENAME COLUMN member_casual TO customer_type
+
+
+CHANGED CASUAL TO GUEST
+UPDATE `capstone-375021.2020.cleaned_data`
+SET customer_type = 'guest'
+WHERE customer_type = 'casual'
+ 
+ 
+3. Analysis 
+
+3a. Ride length averages 
+        SELECT AVG(Ride_Duration)
+        FROM `capstone-375021.2020.cleaned_data`
+        WHERE customer_type = 'member'
+
+
+        SELECT AVG(Ride_Duration)
+        FROM `capstone-375021.2020.cleaned_data`
+        WHERE customer_type = 'guest'
+        
+ 3b. Ridership numbers 
+        SELECT COUNT(ride_id)
+        FROM `capstone-375021.2020.cleaned_data`
+        WHERE customer_type = 'member'
+
+        SELECT COUNT(ride_id)
+        FROM `capstone-375021.2020.cleaned_data`
+        WHERE customer_type = 'member'
+
+3c. Start staion names 
+
+  WITH Start_Station_coordinates_casuals AS (
+SELECT start_station_name, ROUND(start_lat,2) AS Rounded_Lat, ROUND(start_lng,2) as Rounded_Lng, COUNT(*) as number_of_rides
+FROM `capstone-375021.2020.final_data`
+WHERE start_station_name IS NOT NULL AND customer_type = 'member'
+GROUP BY start_station_name, Rounded_lat, Rounded_lng, customer_type
+ORDER BY start_station_name )
+SELECT * FROM Start_Station_coordinates_casuals
+
+
+Member start station coordinates 2020 
+WITH Start_Station_coordinates_member AS (
+SELECT start_station_name, ROUND(start_lat,2) AS Rounded_Lat, ROUND(start_lng,2) as Rounded_Lng, COUNT(*) as number_of_rides
+FROM `capstone-375021.2020.final_data`
+WHERE start_station_name IS NOT NULL AND customer_type = 'member'
+GROUP BY start_station_name, Rounded_lat, Rounded_lng, customer_type
+ORDER BY start_station_name )
+SELECT * FROM Start_Station_coordinates_member
+
+4. Findings and Recommendations 
+   1. On average, guests rides tend to be twice as long as members. Perhaps members are using the bikes as a conviential method of transportation while guests could be using it as leisure (tourists). 
+    
+   2. While both groups see drastic increase in number of rides in the summer, members do not see such a steep increase or decrease. Meaning members are riding divvy bikes even throughout the winter. 
+  
+  3. The most common start stations 
+      Streeter Dr & Grand Ave - 33964
+      Clark St & Elm St - 30069	
+      Theater on the Lake- 28269
+      Lake Shore Dr & Monroe St - 27934
+      Lake Shore Dr & North Blvd - 25521
+      
+  4. Members made up 60.98% of rides (1,995,478) and guests made up 39.02% of rides (1,277,128). 
+  
+  5. The most popular day for the summer (in terms of number of rides) 
+      Both groups:  08/08     27,711
+      Member        08/29     12,164 
+      Guests        09/ 05    16,497 
+      
+  Recommendations: 
+
+1.How do annual members and guest  riders use Cyclistic bikes differently? 
+The average length of rides and number of rides. 
+
+
+2. Why would guest  riders buy Cyclistic annual memberships? 
+    Given the seasonal trends in guest ridership, conversion to an annual membership does not seem plausible. However,     creating a spring/ summer membership option could be a possible avenue to increase membership. 
+
+3. How can cyclists use digital media to influence guest riders to become members?
+    A divvy bike trail/ map based on the location of the rider. For example, a QR scan is already utilized to "unlock" the bike and begin the ride. In that same app, could be a collection of user submitted trails. A member user might be using x street and then taking a left on y street which gives the rider a great view of the lake or the least amount of car traffic. 
+  
+ 
+ Conlusion 
+This data analysis project provided valuable insights into the behavior and preferences of Divvy bike riders in Chicago from 2020-2022. By utilizing SQL and Tableau to clean, combine, and visualize the data, I was able to gain a comprehensive understanding of ride frequency, duration, and seasonal trends.
+
+Through this analysis, I discovered that there were notable differences in the usage patterns of guest riders and member riders. For example, guest riders tended to take shorter rides on average than member riders, and their usage patterns were more sporadic throughout the year.
+
+Overall, this project demonstrated the power of data analysis in identifying patterns and trends that can inform business decisions and improve customer satisfaction. The skills and techniques I utilized in this project, including data cleaning, SQL querying, and data visualization, are valuable assets in any data-driven organization.
+
+If you have any questions please feel free to reach out via email linked in my profile! Thanks 
+    
+       
